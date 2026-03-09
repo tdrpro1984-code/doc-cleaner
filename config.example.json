@@ -1,0 +1,27 @@
+{
+  "ai": {
+    "backend": "gemini",
+    "prompt_template": "prompts/default.txt",
+    "gemini": {
+      "model": "gemini-2.5-pro"
+    },
+    "ollama": {
+      "model": "qwen3.5:9b",
+      "host": "http://localhost:11434"
+    }
+  },
+  "pdf": {
+    "dpi": 200,
+    "max_pages": 15
+  },
+  "output": {
+    "frontmatter": true
+  },
+  "ad_truncation_patterns": [
+    "<投資人權益通知訊息[ >]",
+    "[～~]\\s*總\\s*公\\s*司\\s*訊\\s*息\\s*[～~]",
+    "依金融監督管理委員會保險局",
+    "謹慎理財.{0,20}信用至上",
+    "本商品由.{0,30}核准"
+  ]
+}
