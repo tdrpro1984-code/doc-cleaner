@@ -76,6 +76,7 @@ def warn_config_secrets(config):
     """Warn if config.json contains fields that should be in .env instead."""
     secret_paths = [
         (["ai", "gemini", "api_key"], "GEMINI_API_KEY"),
+        (["ai", "groq", "api_key"], "GROQ_API_KEY"),
         (["ai", "ollama", "api_key"], "OLLAMA_API_KEY"),
         (["pdf", "password"], "PDF_PASSWORD"),
     ]
@@ -129,6 +130,29 @@ def create_ai_backend(ai_mode, config):
             sys.exit(EXIT_NO_INPUT)
         model = ai_config.get("gemini", {}).get("model", "gemini-2.5-pro")
         return GeminiBackend(api_key=api_key, model=model)
+
+    if ai_mode == "groq":
+        from ai.groq import GroqBackend
+
+        api_key = os.getenv("GROQ_API_KEY")
+        if not api_key:
+            logger.error(
+                "GROQ_API_KEY not set. Add it to your .env file:\n"
+                "  echo 'GROQ_API_KEY=your-key-here' >> .env\n"
+                "Do NOT put API keys in config.json — it may be committed to git."
+            )
+            sys.exit(EXIT_NO_INPUT)
+
+        groq_config = ai_config.get("groq", {})
+        model = groq_config.get("model", "meta-llama/llama-4-scout-17b-16e-instruct")
+        base_url = groq_config.get("base_url", "https://api.groq.com/openai/v1")
+        timeout = groq_config.get("timeout", 120)
+        return GroqBackend(
+            api_key=api_key,
+            model=model,
+            base_url=base_url,
+            timeout=timeout,
+        )
 
     if ai_mode == "ollama":
         try:
@@ -430,7 +454,7 @@ def main():
     parser.add_argument("--input", "-i", required=True, help="file or directory to process")
     parser.add_argument("--output-dir", "-o", default="./output", help="output directory (default: ./output)")
     parser.add_argument("--config", default=None, help="path to config JSON (default: <script-dir>/config.json)")
-    parser.add_argument("--ai", choices=["gemini", "ollama", "none"], default=None, help="AI backend (default: from config or gemini)")
+    parser.add_argument("--ai", choices=["gemini", "groq", "ollama", "none"], default=None, help="AI backend (default: from config or gemini)")
     parser.add_argument("--password", default=None, help="PDF decryption password (overrides .env and config)")
     parser.add_argument("--summary", action="store_true", help="print JSON summary to stdout after processing")
     parser.add_argument("--dry-run", action="store_true", help="preview without writing files")

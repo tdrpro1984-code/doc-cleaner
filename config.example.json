@@ -6,6 +6,11 @@
     "gemini": {
       "model": "gemini-2.5-pro"
     },
+    "groq": {
+      "model": "meta-llama/llama-4-scout-17b-16e-instruct",
+      "base_url": "https://api.groq.com/openai/v1",
+      "timeout": 120
+    },
     "ollama": {
       "model": "qwen3.5:9b",
       "host": "http://localhost:11434"
