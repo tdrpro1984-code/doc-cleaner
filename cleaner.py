@@ -94,14 +94,14 @@ def warn_config_secrets(config):
 
 
 def validate_patterns(config):
-    """Pre-validate ad_truncation_patterns regex at startup."""
-    patterns = config.get("ad_truncation_patterns", [])
-    for i, pat in enumerate(patterns):
-        try:
-            re.compile(pat)
-        except re.error as e:
-            logger.error(f"Invalid regex in ad_truncation_patterns[{i}]: {pat!r} — {e}")
-            sys.exit(EXIT_NO_INPUT)
+    """Pre-validate ad_truncation_patterns and ad_strip_patterns regex at startup."""
+    for key in ("ad_truncation_patterns", "ad_strip_patterns"):
+        for i, pat in enumerate(config.get(key, [])):
+            try:
+                re.compile(pat)
+            except re.error as e:
+                logger.error(f"Invalid regex in {key}[{i}]: {pat!r} — {e}")
+                sys.exit(EXIT_NO_INPUT)
 
 
 def create_ai_backend(ai_mode, config):

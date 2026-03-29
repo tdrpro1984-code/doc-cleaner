@@ -46,16 +46,27 @@ def clean_text(text, cutoff_patterns=None, strip_patterns=None,
     if strip_patterns:
         for pat in strip_patterns:
             try:
-                # Remove from pattern match to end of paragraph (next blank line or EOF)
-                text = re.sub(pat + r"[^\n]*(?:\n(?!\n)[^\n]*)*", "", text)
+                compiled = re.compile(pat)
             except re.error as e:
                 logger.warning(f"Invalid strip pattern {pat!r}: {e}")
+                continue
+            # Find match, then remove from match to end of paragraph
+            while True:
+                m = compiled.search(text)
+                if not m:
+                    break
+                # Find end of paragraph (next blank line or EOF)
+                end = text.find("\n\n", m.start())
+                if end == -1:
+                    text = text[:m.start()]
+                else:
+                    text = text[:m.start()] + text[end:]
 
     patterns = cutoff_patterns or DEFAULT_CUTOFF_PATTERNS
 
     if patterns:
         cutoff_re = re.compile(
-            "|".join(f"({p})" for p in patterns),
+            "|".join(f"(?:{p})" for p in patterns),
             re.DOTALL,
         )
         m = cutoff_re.search(text)

@@ -32,6 +32,17 @@ def _has_pipe_table(text):
     return bool(re.search(r"\|.+\|.+\|", text))
 
 
+def _get_page_count(filepath):
+    """Get page count via fitz, default 1 if unavailable."""
+    if not fitz:
+        return 1
+    try:
+        with fitz.open(filepath) as doc:
+            return max(doc.page_count, 1)
+    except Exception:
+        return 1
+
+
 def classify(filepath, odl_text=None):
     """
     Classify a PDF into one of three types: native, layout_broken, or scanned.
@@ -45,33 +56,27 @@ def classify(filepath, odl_text=None):
         - text: extracted text (may be empty for scanned)
         - metadata: dict with density, garbage_ratio, short_line_ratio, page_count
     """
-    # If ODL provided good text, use it for classification
+    # If ODL provided good text, classify as NATIVE — tables already extracted
     if odl_text and len(odl_text) >= 50:
-        # Get page count via fitz if available, else estimate
-        pages = 1
-        if fitz:
-            try:
-                with fitz.open(filepath) as doc:
-                    pages = max(doc.page_count, 1)
-            except Exception:
-                pass
-
+        pages = _get_page_count(filepath)
         density = len(odl_text.strip()) / pages
-        metadata = {
-            "page_count": pages,
-            "char_density": round(density, 1),
-            "garbage_ratio": 0,
-            "short_line_ratio": 0,
-            "source": "odl",
-        }
 
-        fname = os.path.basename(filepath)
-        if _has_pipe_table(odl_text):
-            logger.info(f"[Classifier] Native PDF via ODL (tables detected): {fname}")
-            return PdfType.NATIVE, odl_text, metadata
-
-        logger.info(f"[Classifier] Native PDF via ODL (density={density:.0f}): {fname}")
-        return PdfType.NATIVE, odl_text, metadata
+        # Per-page density too low = mostly images, ODL only got captions
+        if density < 20 and not _has_pipe_table(odl_text):
+            logger.info(
+                f"[Classifier] ODL text sparse (density={density:.0f}/page), "
+                f"falling back to fitz: {os.path.basename(filepath)}"
+            )
+        else:
+            detail = "tables detected" if _has_pipe_table(odl_text) else f"density={density:.0f}"
+            logger.info(f"[Classifier] Native PDF via ODL ({detail}): {os.path.basename(filepath)}")
+            return PdfType.NATIVE, odl_text, {
+                "page_count": pages,
+                "char_density": round(density, 1),
+                "garbage_ratio": 0,
+                "short_line_ratio": 0,
+                "source": "odl",
+            }
 
     # ODL not available or produced insufficient text — fall back to PyMuPDF
     if not fitz:

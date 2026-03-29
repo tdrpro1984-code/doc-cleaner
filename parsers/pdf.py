@@ -31,27 +31,15 @@ def odl_available():
     if _odl_available_cache is not None:
         return _odl_available_cache
 
-    # Check Python package
     try:
         import opendataloader_pdf  # noqa: F401
-    except ImportError:
-        logger.debug("opendataloader-pdf not installed — ODL extraction unavailable")
+        subprocess.run(["java", "-version"], capture_output=True, timeout=5)
+        _odl_available_cache = True
+    except (ImportError, FileNotFoundError, subprocess.TimeoutExpired):
+        logger.debug("ODL unavailable (missing opendataloader-pdf or Java)")
         _odl_available_cache = False
-        return False
 
-    # Check Java
-    try:
-        subprocess.run(
-            ["java", "-version"],
-            capture_output=True, timeout=5,
-        )
-    except (FileNotFoundError, subprocess.TimeoutExpired):
-        logger.debug("Java not available on PATH — ODL extraction unavailable")
-        _odl_available_cache = False
-        return False
-
-    _odl_available_cache = True
-    return True
+    return _odl_available_cache
 
 
 def clean_odl_output(text):
@@ -85,7 +73,6 @@ def extract_text_odl(filepath):
         # ODL writes output alongside the input file
         stem = os.path.splitext(filepath)[0]
         md_path = stem + ".md"
-        images_dir = stem + "_images"
 
         if not os.path.exists(md_path):
             logger.debug(f"ODL produced no output file for {os.path.basename(filepath)}")
@@ -94,25 +81,16 @@ def extract_text_odl(filepath):
         with open(md_path, "r", encoding="utf-8") as f:
             text = f.read()
 
-        # Cleanup side-effect files
+        # Cleanup side-effect files (.md + *_images/ dirs)
         try:
             os.remove(md_path)
         except OSError:
             pass
-        if os.path.isdir(images_dir):
-            try:
-                shutil.rmtree(images_dir)
-            except OSError:
-                pass
-        # Also clean up any glob pattern images dirs
-        for d in glob.glob(stem + "_images*"):
+        for d in glob.glob(glob.escape(stem) + "_images*"):
             if os.path.isdir(d):
-                try:
-                    shutil.rmtree(d)
-                except OSError:
-                    pass
+                shutil.rmtree(d, ignore_errors=True)
 
-        if not text or not text.strip():
+        if not text.strip():
             return None
 
         return clean_odl_output(text)
