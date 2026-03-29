@@ -16,11 +16,12 @@ Most document-to-Markdown tools either drop tables, butcher CJK text, or require
 |---|---|
 | CJK-first | Big5, CP950, UTF-16 auto-detection — covers all Taiwan bank statements |
 | Table preservation | DOCX + XLSX → Markdown pipe tables |
+| High-quality PDF extraction | Optional opendataloader-pdf produces pipe tables directly from PDFs |
 | Smart PDF triage | Auto-classifies: native text / layout-broken / scanned |
 | AI structuring | Gemini (cloud), Groq (cloud), or Ollama (local) |
 | No-AI mode | `--ai none` — pure extraction, zero API keys, zero cloud |
 | PDF decryption | Optional pikepdf |
-| Ad truncation | Configurable regex patterns to strip bank disclaimers |
+| Ad cleaning | Tail truncation + inline removal with configurable regex |
 | Privacy-first | Local Ollama option — documents never leave your machine |
 | Atomic writes | Temp file + `os.replace()` — no partial output |
 | Dry-run preview | `--dry-run` before committing |
@@ -37,14 +38,17 @@ cd doc-cleaner
 # 2. Install core dependencies
 pip install -r requirements.txt
 
-# 3. (Optional) Install AI backend
+# 3. (Optional) High-quality PDF extraction (recommended)
+pip install opendataloader-pdf            # Requires Java 11+ (brew install openjdk@21)
+
+# 4. (Optional) Install AI backend
 pip install google-genai python-dotenv   # for Gemini
 # or
 # Groq uses its OpenAI-compatible API directly; just set GROQ_API_KEY
 # or
 pip install ollama                        # for local Ollama
 
-# 4. (Optional) Install PDF extras
+# 5. (Optional) Install PDF extras
 pip install pikepdf                       # PDF decryption
 pip install pdf2image                     # PDF vision mode (requires poppler)
 
@@ -156,31 +160,39 @@ Password priority: `--password` CLI arg > `.env` (`PDF_PASSWORD`) > `config.json
 
 ---
 
-## Custom Ad Truncation Patterns
+## Ad Cleaning
 
-Taiwan bank statement PDFs often end with investment risk notices, legal disclaimers, and promotional boilerplate. doc-cleaner truncates everything after the first regex match.
+Taiwan bank statement PDFs often contain investment risk notices, legal disclaimers, and promotional content. doc-cleaner provides two cleaning mechanisms:
 
-Patterns are sourced from two places:
+### Tail Truncation (`ad_truncation_patterns`)
 
-| Location | Purpose |
-|---|---|
-| `classifiers/noise.py` `DEFAULT_CUTOFF_PATTERNS` | Built-in defaults for common Taiwan financial documents |
-| `config.json` `ad_truncation_patterns` | **User-customizable** — overrides the built-in defaults |
+Everything after the first match is **removed entirely**. Best for legal disclaimers at the end of documents.
 
-**Add your bank's patterns**: edit the `ad_truncation_patterns` array in `config.json`:
+### Inline Removal (`ad_strip_patterns`, v1.1)
+
+Each matched paragraph is **removed individually** without affecting surrounding content. Best for promotional blocks embedded between useful data.
+
+Configure in `config.json`:
 
 ```json
-"ad_truncation_patterns": [
-  "<投資人權益通知訊息[ >]",
-  "[～~]\\s*總\\s*公\\s*司\\s*訊\\s*息\\s*[～~]",
-  "依金融監督管理委員會保險局",
-  "謹慎理財.{0,20}信用至上",
-  "本商品由.{0,30}核准",
-  "your new pattern here"
-]
+{
+  "ad_truncation_patterns": [
+    "謹慎理財.{0,20}信用至上",
+    "your tail-truncation pattern here"
+  ],
+  "ad_strip_patterns": [
+    "※運動賺回饋",
+    "your inline-removal pattern here"
+  ]
+}
 ```
 
-Safety: if truncation would remove more than 70% of content, it's skipped with a warning.
+| Setting | Behavior | Use case |
+|---|---|---|
+| `ad_truncation_patterns` | Truncate everything after first match | End-of-document disclaimers |
+| `ad_strip_patterns` | Remove each matched paragraph | Inline promotional blocks |
+
+Safety: if tail truncation would remove more than 70% of content, it's skipped with a warning.
 
 All regex patterns are validated at startup — invalid syntax causes an immediate error, not a mid-processing crash.
 
@@ -218,7 +230,25 @@ Example: for medical documents, create `prompts/medical.txt` and emphasize prese
 
 ## Smart PDF Triage
 
-Not all PDFs are equal. doc-cleaner classifies each PDF before processing:
+Not all PDFs are equal. doc-cleaner classifies each PDF before processing.
+
+### With opendataloader-pdf (v1.1, recommended)
+
+When `opendataloader-pdf` + Java 11+ are installed, doc-cleaner automatically uses it for PDF extraction. opendataloader-pdf produces **proper Markdown pipe tables** directly, dramatically reducing the number of files that need AI processing.
+
+```
+PDF input
+  ↓
+opendataloader-pdf (Fast mode)  ← tables → pipe tables automatically
+  ↓
+Quality check
+  ├─ Good (structured content) → Output Markdown directly ✓
+  └─ Bad (scanned / empty)    → Send to AI
+```
+
+Without opendataloader-pdf, it falls back to PyMuPDF — same behavior as before.
+
+### Classification Logic
 
 | Type | Detection | Strategy |
 |---|---|---|
@@ -226,7 +256,7 @@ Not all PDFs are equal. doc-cleaner classifies each PDF before processing:
 | Layout-broken | >70% short lines (tables crushed) | AI vision + text fallback |
 | Scanned | char density <8 | AI vision + text fallback |
 
-This saves AI calls for native-text PDFs — only files that truly need vision processing get sent to the AI.
+> With opendataloader-pdf, many PDFs previously classified as "layout-broken" get upgraded to "native text" because ODL successfully extracts the tables — skipping AI entirely.
 
 ### Hybrid Strategy (Recommended)
 
@@ -236,11 +266,8 @@ The most cost-effective workflow:
 # Step 1: Extract everything in raw mode (fast, free, private)
 python cleaner.py --input ./downloads/ --ai none --output-dir ./output/raw
 
-# Step 2: Re-process only files that need AI
-# (check logs for "Layout-broken" or "Scanned" classification)
+# Step 2: Re-process only "Scanned" files with AI
 python cleaner.py --input problem_file.pdf --ai gemini --output-dir ./output/ai
-# or
-python cleaner.py --input problem_file.pdf --ai groq --output-dir ./output/ai
 ```
 
 ---
@@ -278,13 +305,28 @@ Table reconstruction from layout-broken PDFs is demanding. Smaller models will s
 
 | Format | Parser | Tables | Notes |
 |---|---|---|---|
-| **PDF** (native text) | PyMuPDF (fitz) | AI rebuild | Fast text extraction; tables need AI structuring |
+| **PDF** (native text) | opendataloader-pdf / PyMuPDF | pipe tables / AI rebuild | ODL produces tables directly; falls back to PyMuPDF |
 | **PDF** (scanned) | pdf2image → AI vision | AI rebuild | Requires poppler |
-| **PDF** (encrypted) | pikepdf → above | AI rebuild | Optional pikepdf |
+| **PDF** (encrypted) | pikepdf → above | pipe tables / AI rebuild | Optional pikepdf |
 | **DOCX** | python-docx | pipe tables | Cross-platform; textutil fallback on macOS only |
 | **XLSX / XLS** | pandas + openpyxl | pipe tables | All sheets |
 | **CSV** | pandas | pipe tables | Auto-detected |
 | **TXT / MD** | stdlib | — | Multi-encoding (Big5, CP950, UTF-16) |
+
+### Installing opendataloader-pdf (recommended)
+
+High-quality PDF extraction with proper table support:
+
+```bash
+# Install Java 11+
+brew install openjdk@21        # macOS
+# sudo apt install openjdk-21-jre  # Ubuntu
+
+# Install Python package
+pip install opendataloader-pdf
+```
+
+When installed, doc-cleaner auto-detects and uses it. Without it, PyMuPDF is used as fallback.
 
 ### Installing poppler
 

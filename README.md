@@ -20,11 +20,12 @@ doc-cleaner 從第一天就為**繁體中文的文件**設計：
 | ---------- | -------------------------------------- |
 | 中文友好       | Big5 / CP950 / UTF-16 自動偵測，金融業對帳單也能用   |
 | 表格保留       | DOCX + XLSX → Markdown pipe table，不丟格式 |
+| PDF 高品質提取  | 選裝 opendataloader-pdf，表格直接輸出完整 pipe table |
 | PDF 智慧分流   | 自動辨識：原生文字 / 格式破碎 / 掃描圖片                |
 | AI 結構化     | Gemini 雲端、Groq 雲端 或 Ollama 本地             |
 | 無 AI 模式（選） | `--ai none` 純提取，零 API、零雲端              |
 | PDF 解密（選）  | 選裝 pikepdf                             |
-| 廣告截斷       | 可自訂正則，移除副檔內的固定廣告尾巴                     |
+| 廣告清洗       | 尾部截斷 + 中間移除，可自訂正則                      |
 | 隱私優先（選）    | Ollama 本地推理，文件不離開你的電腦                  |
 | 原子寫入       | 臨時檔 + `os.replace()`，不會產生半殘輸出          |
 | 預覽模式       | `--dry-run` 先看再動手                      |
@@ -41,14 +42,17 @@ cd doc-cleaner
 # 2. 安裝核心依賴
 pip install -r requirements.txt
 
-# 3.（選裝）AI 後端
+# 3.（選裝）高品質 PDF 提取（推薦）
+pip install opendataloader-pdf            # 需要 Java 11+（brew install openjdk@21）
+
+# 4.（選裝）AI 後端
 pip install google-genai python-dotenv   # Gemini 雲端
 # 或
 # Groq 雲端不需要額外 SDK；只要設定 GROQ_API_KEY
 # 或
 pip install ollama                        # Ollama 本地
 
-# 4.（選裝）PDF 擴充
+# 5.（選裝）PDF 擴充
 pip install pikepdf                       # PDF 解密
 pip install pdf2image                     # PDF 視覺模式（另需安裝 poppler）
 
@@ -159,31 +163,39 @@ PDF_PASSWORD=your-pdf-password
 
 ---
 
-## 自訂廣告截斷正則
+## 廣告清洗
 
-台灣金融業對帳單 PDF 的尾巴經常帶有投資風險告知、法律聲明等固定文字。doc-cleaner 會在提取文字後、送入 AI 前，把匹配到的位置以後的內容全部截掉。
+台灣金融業對帳單 PDF 經常帶有投資風險告知、法律聲明、行銷廣告等固定文字。doc-cleaner 提供兩種清洗機制：
 
-正則規則放在兩個地方：
+### 尾部截斷（`ad_truncation_patterns`）
 
-| 位置 | 用途 |
-|---|---|
-| `classifiers/noise.py` 的 `DEFAULT_CUTOFF_PATTERNS` | 內建預設，涵蓋常見台灣金融文件 |
-| `config.json` 的 `ad_truncation_patterns` | **使用者自訂**，會覆蓋內建預設 |
+匹配到的位置以後的內容**全部截掉**。適合出現在文件尾部的法律聲明、公告區塊。
 
-**新增你銀行的正則**：直接在 `config.json` 的 `ad_truncation_patterns` 陣列加入即可。
+### 中間移除（`ad_strip_patterns`，v1.1 新增）
+
+匹配到的段落**單獨移除**，不影響前後內容。適合夾在有用內容之間的行銷廣告、優惠推播。
+
+正則規則放在 `config.json`：
 
 ```json
-"ad_truncation_patterns": [
-  "<投資人權益通知訊息[ >]",
-  "[～~]\\s*總\\s*公\\s*司\\s*訊\\s*息\\s*[～~]",
-  "依金融監督管理委員會保險局",
-  "謹慎理財.{0,20}信用至上",
-  "本商品由.{0,30}核准",
-  "你的銀行的新正則放這裡"
-]
+{
+  "ad_truncation_patterns": [
+    "謹慎理財.{0,20}信用至上",
+    "你的銀行的尾部截斷正則"
+  ],
+  "ad_strip_patterns": [
+    "※運動賺回饋",
+    "你的銀行的中間移除正則"
+  ]
+}
 ```
 
-安全機制：如果截斷會移除超過 70% 的內容，程式會跳過截斷並警告，防止誤殺。
+| 設定 | 行為 | 適用場景 |
+|---|---|---|
+| `ad_truncation_patterns` | 第一次匹配後全部截掉 | 文件尾部的固定聲明 |
+| `ad_strip_patterns` | 每次匹配移除該段落 | 夾在中間的行銷廣告 |
+
+安全機制：如果尾部截斷會移除超過 70% 的內容，程式會跳過截斷並警告，防止誤殺。
 
 程式啟動時會預先驗證所有正則語法，有錯會直接報錯退出，不會等到處理檔案才爆。
 
@@ -223,13 +235,31 @@ doc-cleaner 附帶兩個提示詞範本：
 
 不是所有 PDF 都一樣。doc-cleaner 會先自動分類，再決定處理策略：
 
+### 使用 opendataloader-pdf（v1.1 新增，推薦）
+
+安裝了 `opendataloader-pdf` + Java 11+ 之後，doc-cleaner 會自動優先使用它做 PDF 提取。opendataloader-pdf 能直接產出**完整的 Markdown pipe table**，大幅減少需要送 AI 的檔案數量。
+
+```
+PDF 輸入
+  ↓
+opendataloader-pdf (Fast 模式)  ← 表格自動轉 pipe table
+  ↓
+品質檢查
+  ├─ 好（有結構化內容）→ 直接輸出 Markdown ✓
+  └─ 不好（掃描/空白） → 送 AI 處理
+```
+
+沒有安裝 opendataloader-pdf 時，自動 fallback 到 PyMuPDF，行為和之前一樣。
+
+### 分類邏輯
+
 | 類型   | 偵測條件                   | 策略           |
 | ---- | ---------------------- | ------------ |
 | 原生文字 | 字元密度 ≥8，亂碼 <5%，短行 ≤70% | 直接提取（快速、免費）  |
 | 格式破碎 | 短行 >70%（表格被壓扁）         | AI 視覺 + 文字兜底 |
 | 掃描圖片 | 字元密度 <8                | AI 視覺 + 文字兜底 |
 
-這個分流機制讓原生文字 PDF **不需要浪費 AI 呼叫**，只有真正需要的檔案才送 AI。
+> 使用 opendataloader-pdf 時，許多原本被分類為「格式破碎」的表格密集 PDF 會因為 ODL 成功提取表格而被升級為「原生文字」，跳過 AI 處理。
 
 ### 混合策略（推薦）
 
@@ -239,10 +269,8 @@ doc-cleaner 附帶兩個提示詞範本：
 # 第一步：全部用 raw 模式提取（快速、免費、隱私）
 python cleaner.py --input ./downloads/ --ai none --output-dir ./output/raw
 
-# 第二步：檢查 log，只對 "Layout-broken" 或 "Scanned" 的檔案跑 AI
+# 第二步：檢查 log，只對 "Scanned" 的檔案跑 AI
 python cleaner.py --input problem_file.pdf --ai gemini --output-dir ./output/ai
-# 或
-python cleaner.py --input problem_file.pdf --ai groq --output-dir ./output/ai
 ```
 
 ---
@@ -281,13 +309,28 @@ python cleaner.py --input problem_file.pdf --ai groq --output-dir ./output/ai
 
 | 格式             | Parser            | 表格         | 備註                                |
 | -------------- | ----------------- | ---------- | --------------------------------- |
-| **PDF**（原生文字）  | PyMuPDF (fitz)    | 需 AI 重建    | 文字提取不需 AI，表格結構化才需要                |
+| **PDF**（原生文字）  | opendataloader-pdf / PyMuPDF | pipe table / 需 AI 重建 | ODL 直接產出表格；無 ODL 時 fallback PyMuPDF |
 | **PDF**（掃描）    | pdf2image → AI 視覺 | 需 AI 重建    | 需安裝 poppler                       |
 | **PDF**（加密）    | pikepdf → 上述流程    | 需 AI 重建    | 選裝 pikepdf                        |
 | **DOCX**       | python-docx       | pipe table | 直接提取表格；非 macOS 也可用（textutil 僅為兜底） |
 | **XLSX / XLS** | pandas + openpyxl | pipe table | 全部工作表                             |
 | **CSV**        | pandas            | pipe table | 自動偵測                              |
 | **TXT / MD**   | 標準函式庫             | —          | 多編碼支援                             |
+
+### opendataloader-pdf 安裝（推薦）
+
+高品質 PDF 提取，表格直接轉 pipe table：
+
+```bash
+# 安裝 Java 11+
+brew install openjdk@21        # macOS
+# sudo apt install openjdk-21-jre  # Ubuntu
+
+# 安裝 Python 套件
+pip install opendataloader-pdf
+```
+
+安裝後 doc-cleaner 會自動偵測並優先使用。不裝也沒關係，會 fallback 到 PyMuPDF。
 
 ### poppler 安裝
 
