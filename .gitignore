@@ -20,3 +20,4 @@ venv/
 
 # Spectra app data
 .spectra/
+openspec/.vector-search.db*
