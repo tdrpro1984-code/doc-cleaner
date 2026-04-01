@@ -18,6 +18,7 @@ venv/
 # macOS
 .DS_Store
 
-# Spectra app data
+# Spectra (internal workflow, not for public distribution)
 .spectra/
-openspec/.vector-search.db*
+openspec/
+.claude/skills/spectra-*/
