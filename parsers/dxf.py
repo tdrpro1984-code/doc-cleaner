@@ -15,19 +15,19 @@ def _collect_annotations(msp):
     """Collect text from TEXT and MTEXT entities."""
     texts = []
     for entity in msp.query("TEXT"):
-        t = entity.dxf.text.strip()
+        if len(texts) >= MAX_ENTITIES:
+            break
+        t = (entity.dxf.text or "").strip()
         if t:
             texts.append(t)
-        if len(texts) >= MAX_ENTITIES:
-            logger.warning(f"DXF annotation limit reached ({MAX_ENTITIES}), truncating")
-            return texts
     for entity in msp.query("MTEXT"):
+        if len(texts) >= MAX_ENTITIES:
+            break
         t = entity.text.strip() if entity.text else ""
         if t:
             texts.append(t)
-        if len(texts) >= MAX_ENTITIES:
-            logger.warning(f"DXF annotation limit reached ({MAX_ENTITIES}), truncating")
-            return texts
+    if len(texts) >= MAX_ENTITIES:
+        logger.warning(f"DXF annotation limit reached ({MAX_ENTITIES}), truncating")
     return texts
 
 

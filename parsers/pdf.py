@@ -10,7 +10,6 @@ Supports:
 """
 import os
 import re
-import glob
 import shutil
 import logging
 import subprocess
@@ -86,9 +85,10 @@ def extract_text_odl(filepath):
             os.remove(md_path)
         except OSError:
             pass
-        for d in glob.glob(glob.escape(stem) + "_images*"):
-            if os.path.isdir(d):
-                shutil.rmtree(d, ignore_errors=True)
+        # Only remove the exact _images/ dir ODL creates, not user dirs like _images_backup/
+        odl_images_dir = stem + "_images"
+        if os.path.isdir(odl_images_dir):
+            shutil.rmtree(odl_images_dir, ignore_errors=True)
 
         if not text.strip():
             return None

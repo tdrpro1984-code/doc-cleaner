@@ -42,7 +42,7 @@ def convert_to_text(filepath, format_label="file"):
                 timeout=TEXTUTIL_TIMEOUT,
             )
             if os.path.exists(temp_txt):
-                with open(temp_txt, "r", encoding="utf-8", errors="ignore") as f:
+                with open(temp_txt, "r", encoding="utf-8", errors="replace") as f:
                     content = f.read()
                 if content.strip():
                     return content

@@ -16,6 +16,8 @@ logger = logging.getLogger(__name__)
 
 def _table_to_markdown(table):
     """Convert a python-pptx table to a Markdown pipe table."""
+    if not table.rows:
+        return ""
     rows = []
     for row in table.rows:
         cells = [cell.text.strip().replace("|", "\\|") for cell in row.cells]

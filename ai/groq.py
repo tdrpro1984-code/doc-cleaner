@@ -33,8 +33,25 @@ class GroqBackend(AIBackend):
     ):
         self._api_key = api_key
         self._model = model
-        self._base_url = base_url.rstrip("/")
+        self._base_url = self._validate_base_url(base_url)
         self._timeout = timeout
+
+    @staticmethod
+    def _validate_base_url(url: str) -> str:
+        """Reject private/internal URLs to prevent SSRF via malicious config."""
+        from urllib.parse import urlparse
+        parsed = urlparse(url.rstrip("/"))
+        if parsed.scheme not in ("https", "http"):
+            raise ValueError(f"Groq base_url must use http(s), got {parsed.scheme!r}")
+        host = parsed.hostname or ""
+        if host in ("localhost", "127.0.0.1", "::1") or host.startswith("10.") or \
+           host.startswith("192.168.") or host.startswith("169.254.") or \
+           host.startswith("172.") and 16 <= int(host.split(".")[1]) <= 31:
+            raise ValueError(
+                f"Groq base_url must not point to private/internal networks, got {host!r}. "
+                f"If you need local inference, use Ollama instead."
+            )
+        return parsed.geturl()
 
     def call(self, prompt: str, images: Optional[list] = None, text: Optional[str] = None) -> str:
         """Send prompt + optional images/text to Groq."""
@@ -83,6 +100,8 @@ class GroqBackend(AIBackend):
                     "content": user_content,
                 },
             ],
+            "max_tokens": 16384,
+            "temperature": 0.2,
         }
 
         body = json.dumps(payload).encode("utf-8")
