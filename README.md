@@ -1,6 +1,6 @@
 # doc-cleaner
 
-將 PDF、DOCX、XLSX 及純文字檔轉換為乾淨的結構化 Markdown。
+將 PDF、DOCX、XLSX、PPTX、DXF 及純文字檔轉換為乾淨的結構化 Markdown。
 
 中文友好、表格友好、隱私優先。
 
@@ -55,6 +55,11 @@ pip install ollama                        # Ollama 本地
 # 5.（選裝）PDF 擴充
 pip install pikepdf                       # PDF 解密
 pip install pdf2image                     # PDF 視覺模式（另需安裝 poppler）
+
+# 6.（選裝）額外格式支援
+pip install python-pptx                   # PPTX 投影片
+pip install ezdxf                         # DXF 工程圖
+# PPT / DOC 舊格式：macOS 內建 textutil，無需額外安裝
 
 # 5. 設定
 cp config.example.json config.json        # 編輯 AI 模型、廣告正則等
@@ -315,6 +320,10 @@ python cleaner.py --input problem_file.pdf --ai gemini --output-dir ./output/ai
 | **DOCX**       | python-docx       | pipe table | 直接提取表格；非 macOS 也可用（textutil 僅為兜底） |
 | **XLSX / XLS** | pandas + openpyxl | pipe table | 全部工作表                             |
 | **CSV**        | pandas            | pipe table | 自動偵測                              |
+| **PPTX**       | python-pptx       | pipe table | 投影片文字 + 表格 + 備忘錄                 |
+| **PPT**（舊版）   | macOS textutil    | —          | 純文字提取，僅限 macOS                    |
+| **DOC**（舊版）   | macOS textutil    | —          | 純文字提取，僅限 macOS                    |
+| **DXF**（工程圖）  | ezdxf             | —          | 文字標註、尺寸、圖層、Block 屬性               |
 | **TXT / MD**   | 標準函式庫             | —          | 多編碼支援                             |
 
 ### opendataloader-pdf 安裝（推薦）

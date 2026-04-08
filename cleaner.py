@@ -16,7 +16,7 @@ import logging
 import tempfile
 from pathlib import Path
 
-__version__ = "1.1.0"
+__version__ = "1.2.0"
 
 logger = logging.getLogger("doc-cleaner")
 
@@ -26,7 +26,7 @@ EXIT_PARTIAL = 1        # some files failed
 EXIT_NO_INPUT = 2       # no processable files found or config error
 
 # Supported file extensions
-SUPPORTED_EXTENSIONS = {".pdf", ".docx", ".xlsx", ".xls", ".csv", ".txt", ".md"}
+SUPPORTED_EXTENSIONS = {".pdf", ".docx", ".doc", ".xlsx", ".xls", ".csv", ".txt", ".md", ".pptx", ".ppt", ".dxf"}
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 
@@ -288,6 +288,36 @@ def parse_file(filepath, config):
                 f"  Missing: {e.name or e}"
             )
         text = parse(filepath)
+
+    elif ext == ".doc":
+        try:
+            from parsers.docx import parse_doc
+        except ImportError as e:
+            raise ImportError(
+                f"DOC processing requires macOS textutil.\n"
+                f"  Missing: {e.name or e}"
+            )
+        text = parse_doc(filepath)
+
+    elif ext in (".pptx", ".ppt"):
+        try:
+            from parsers.pptx import parse
+            text = parse(filepath)
+        except ImportError as e:
+            raise ImportError(
+                f"Presentation processing requires python-pptx. Install with: pip install python-pptx\n"
+                f"  Missing: {e.name or e}"
+            )
+
+    elif ext == ".dxf":
+        try:
+            from parsers.dxf import parse
+            text = parse(filepath)
+        except ImportError as e:
+            raise ImportError(
+                f"DXF processing requires ezdxf. Install with: pip install ezdxf\n"
+                f"  Missing: {e.name or e}"
+            )
 
     elif ext in (".txt", ".md"):
         from parsers.text import parse

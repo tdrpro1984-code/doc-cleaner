@@ -81,24 +81,15 @@ def parse(filepath):
         logger.warning(f"python-docx failed: {e}, trying textutil fallback")
 
     # Fallback: textutil (macOS only, loses table structure)
-    if platform.system() == "Darwin":
-        try:
-            import subprocess
-            import tempfile
+    from parsers._textutil import convert_to_text
+    return convert_to_text(filepath, format_label="DOCX")
 
-            with tempfile.TemporaryDirectory() as tmpdir:
-                temp_txt = os.path.join(tmpdir, "out.txt")
-                subprocess.run(
-                    ["textutil", "-convert", "txt", filepath, "-output", temp_txt],
-                    check=True,
-                    capture_output=True,
-                )
-                if os.path.exists(temp_txt):
-                    with open(temp_txt, "r", encoding="utf-8", errors="ignore") as f:
-                        content = f.read()
-                    if content.strip():
-                        return content
-        except Exception as e:
-            logger.warning(f"textutil failed: {e}")
 
-    return ""
+def parse_doc(filepath):
+    """
+    Parse legacy .doc file via macOS textutil.
+
+    Returns extracted plain text, or empty string on failure / non-macOS.
+    """
+    from parsers._textutil import convert_to_text
+    return convert_to_text(filepath, format_label="DOC")

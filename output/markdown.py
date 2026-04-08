@@ -13,7 +13,13 @@ logger = logging.getLogger(__name__)
 
 def _escape_yaml_str(value):
     """Escape a string for safe embedding in double-quoted YAML values."""
-    return value.replace("\\", "\\\\").replace('"', '\\"')
+    return (
+        value
+        .replace("\\", "\\\\")
+        .replace('"', '\\"')
+        .replace("\n", "\\n")
+        .replace("\r", "\\r")
+    )
 
 
 def _render_frontmatter(title, description, tags=None, source_path=None):
@@ -32,7 +38,7 @@ def _render_frontmatter(title, description, tags=None, source_path=None):
         f'pubDate: "{pub_date}"\n'
         f"draft: true\n"
         f"{tags_block}\n"
-        f'source_path: "{_escape_yaml_str(source_path or "")}"\n'
+        f'sourcePath: "{_escape_yaml_str(source_path or "")}"\n'
         f"---\n"
     )
 

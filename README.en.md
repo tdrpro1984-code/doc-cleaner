@@ -1,6 +1,6 @@
 # doc-cleaner
 
-Convert PDF, DOCX, XLSX, and text files to clean, structured Markdown — CJK-friendly, table-friendly, privacy-first.
+Convert PDF, DOCX, XLSX, PPTX, DXF, and text files to clean, structured Markdown — CJK-friendly, table-friendly, privacy-first.
 
 **Requires Python 3.9+** · Part of the [notoriouslab](https://github.com/notoriouslab) open-source toolkit.
 
@@ -51,6 +51,11 @@ pip install ollama                        # for local Ollama
 # 5. (Optional) Install PDF extras
 pip install pikepdf                       # PDF decryption
 pip install pdf2image                     # PDF vision mode (requires poppler)
+
+# 6. (Optional) Extra format support
+pip install python-pptx                   # PPTX presentations
+pip install ezdxf                         # DXF engineering drawings
+# PPT / DOC legacy formats: macOS textutil built-in, no extra install needed
 
 # 5. Configure
 cp config.example.json config.json
@@ -311,6 +316,10 @@ Table reconstruction from layout-broken PDFs is demanding. Smaller models will s
 | **DOCX** | python-docx | pipe tables | Cross-platform; textutil fallback on macOS only |
 | **XLSX / XLS** | pandas + openpyxl | pipe tables | All sheets |
 | **CSV** | pandas | pipe tables | Auto-detected |
+| **PPTX** | python-pptx | pipe tables | Slide text + tables + speaker notes |
+| **PPT** (legacy) | macOS textutil | — | Plain text extraction, macOS only |
+| **DOC** (legacy) | macOS textutil | — | Plain text extraction, macOS only |
+| **DXF** (engineering) | ezdxf | — | Text annotations, dimensions, layers, block attributes |
 | **TXT / MD** | stdlib | — | Multi-encoding (Big5, CP950, UTF-16) |
 
 ### Installing opendataloader-pdf (recommended)
